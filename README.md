@@ -38,7 +38,7 @@ import twinleaf
 vmr = twinleaf.Device('serial://COM1')
 print(vmr.samples.vector(10))
 ```
-To find possible tio ports to use run `tio-proxy --enum`. Windows will often output some COMx port such as `serial://COM3`, while Mac OS labels serial ports  `serial:///dev/cu.usbmodemCSB33841` or `serial:///dev/tty.usbmodemCSB33841`. 
+To find possible tio ports to use run `tio-proxy --enum`. Windows will often output some COMx port such as `serial://COM3`, while Mac OS will output some cu.XXXXX or tty.XXXXX name such as `serial:///dev/cu.usbserialXXXXXX` or `serial:///dev/tty.usbmodemXXXXXX`. 
 
 If `tio-proxy --enum` does not work try looking at serial ports in the respective OS device manager for active serial ports. 
 

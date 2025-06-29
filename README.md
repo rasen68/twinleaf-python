@@ -15,13 +15,11 @@ Common platforms are support installation from PyPI using:
 
     `pip install twinleaf`
 
-
-## Use
+## Programming
 
 Examples of basic usage can be found in the `examples` directory.
 
-A console script `itl` is installed to provide an interactive tool for configuring devices. We strongly 
-
+A console script `itl` is installed to provide an interactive tool for configuring devices as well.
 
 ## Programming
 
@@ -29,7 +27,7 @@ The `twinleaf` module performs metaprogramming to construct an object that has m
 
 ```python
 import twinleaf
-csb = twinleaf.Device('COM1')
+csb = twinleaf.Device('serial://COM1')
 csb.settings.coil.x.current(0.25) # mA
 ```
 
@@ -37,9 +35,13 @@ To receive data streams from a sensor such as the [Twinleaf VMR vector magnetome
 
 ```python
 import twinleaf
-vmr = twinleaf.Device()
+vmr = twinleaf.Device('serial://COM1')
 print(vmr.samples.vector(10))
 ```
+To find possible tio ports to use run `tio-proxy --enum`. Windows will often output some COMx port such as `serial://COM3`, while Mac OS will output some cu.XXXXX or tty.XXXXX name such as `serial:///dev/cu.usbserialXXXXXX` or `serial:///dev/tty.usbmodemXXXXXX`. 
+
+If `tio-proxy --enum` does not work try looking at serial ports in the respective OS device manager for active serial ports. 
+
 
 ## Migration from `tio-python`
 

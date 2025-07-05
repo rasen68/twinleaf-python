@@ -116,42 +116,48 @@ class Device(_twinleaf.Device):
             cls = self._get_rpc_obj(name, meta)
             setattr(parent, mname, cls())
 
-    def _samples_list(self, n: int = 1, stream: str = "", columns: list[str] = [], average: bool = False, concatenate: bool = False):
-        if n==1:
-            # single sample: dict of samples
-            sample = list(self._samples(n, stream=stream, columns=columns))[0]
-            # sample.pop("stream")
-            # sample.pop("time")
-            return sample
-        else:
-            samples = list(self._samples(n, stream=stream, columns=columns))
-            # bin into streams
-            streams = {}
-            for line in samples:
-                stream_id = line.pop("stream", None)
-                if stream_id not in streams:
-                    streams[stream_id] = { "stream": stream_id }
-                for key, value in line.items():
-                    if key not in streams[stream_id]:
-                        streams[stream_id][key] = []
-                    streams[stream_id][key].append(value)
-            if average:
-                # average down to dict of samples
-                for id in streams.keys():
-                    for key in streams[id].keys():
-                        if key != "stream":
-                            streams[id][key] = sum(streams[id][key]) / len(streams[id][key])
+    def _samples_dict(self, n: int = 1, stream: str = "", columns: list[str] = []):
+        samples = list(self._samples(n, stream=stream, columns=columns))
+        # bin into streams
+        streams = {}
+        for line in samples:
+            stream_id = line.pop("stream", None)
+            if stream_id not in streams:
+                streams[stream_id] = { "stream": stream_id }
+            for key, value in line.items():
+                if key not in streams[stream_id]:
+                    streams[stream_id][key] = []
+                streams[stream_id][key].append(value)
+        return streams
 
-            if concatenate:
-                raise NotImplementedError("Stream concatenation not yet implemented")
+    def _samples_list(self, n: int = 1, stream: str = "", columns: list[str] = [], timeColumn = True, titleRow = True):
+        streams = self._samples_dict(n, stream, columns)
+        # Convert to list with rows of data. Not super happy about how inefficient this is. 
+        if len(streams.items()) > 1:
+            raise NotImplementedError("Stream concatenation not yet implemented for two different streams")
+        stream = list(streams.values())[0]
+        stream.pop('stream')
+        if not timeColumn:
+            stream.pop('time')
+        dataColumns = [column for column in stream.values() ]
+        dataRows = [list(row) for row in zip(*dataColumns)]
+        if titleRow:
+            columnNames = list(stream.keys());
+            dataRows.insert(0,columnNames)
+        return dataRows
 
-            return streams
-                
-    def _get_obj_samples(self, name: str, stream: str = "", columns: list[str] = [], *args, **kwargs):
+    def _get_obj_samples_dict(self, name: str, stream: str = "", columns: list[str] = [], *args, **kwargs):
+        def samples_method(local_self, *args, **kwargs):
+            # print(f"Sampling {name} from stream {stream} with columns {columns}")
+            return self._samples_dict(stream=stream, columns=columns, *args, **kwargs)
+        cls = type('samplesDict'+name,(), {'__name__':name, '__call__':samples_method})
+        return cls
+
+    def _get_obj_samples_list(self, name: str, stream: str = "", columns: list[str] = [], *args, **kwargs):
         def samples_method(local_self, *args, **kwargs):
             # print(f"Sampling {name} from stream {stream} with columns {columns}")
             return self._samples_list(stream=stream, columns=columns, *args, **kwargs)
-        cls = type('samples'+name,(), {'__name__':name, '__call__':samples_method})
+        cls = type('samplesList'+name,(), {'__name__':name, '__call__':samples_method})
         return cls
 
     def _instantiate_samples(self, announce: bool = False):
@@ -165,7 +171,7 @@ class Device(_twinleaf.Device):
                 streams_flattened.append(stream+"."+column_name)
 
         # All samples        
-        cls = self._get_obj_samples("samples", stream="", columns=[])
+        cls = self._get_obj_samples_dict("samples", stream="", columns=[])
         setattr(self, 'samples', cls())
 
         for stream_column in streams_flattened:
@@ -174,7 +180,7 @@ class Device(_twinleaf.Device):
 
             if not hasattr(parent, stream):
                 # All samples for this stream
-                cls = self._get_obj_samples(stream, stream=stream, columns=[])
+                cls = self._get_obj_samples_list(stream, stream=stream, columns=[])
                 setattr(parent, stream, cls())
             parent = getattr(parent, stream)
 
@@ -184,14 +190,14 @@ class Device(_twinleaf.Device):
                 stream_prefix += "." + token
                 if not hasattr(parent, token):
                     #wildcard columns
-                    cls = self._get_obj_samples(token, stream=stream, columns=[stream_prefix[1:]+".*"])
+                    cls = self._get_obj_samples_list(token, stream=stream, columns=[stream_prefix[1:]+".*"])
                     setattr(parent, token, cls())
                 parent = getattr(parent, token)
 
             # specific stream samples
             stream, column_name = stream_column.split(".",1)
 
-            cls = self._get_obj_samples(mname, stream=stream, columns=[column_name])
+            cls = self._get_obj_samples_list(mname, stream=stream, columns=[column_name])
             setattr(parent, mname, cls())
 
     def _interact(self):

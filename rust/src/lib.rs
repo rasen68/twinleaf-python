@@ -34,8 +34,10 @@ impl PyIter {
             // Check for keyboard interrupt
             slf.py().check_signals()?;
 
-            let sample = slf.port.next();
-            
+            let sample = match slf.port.next() {
+                Ok(sample) => sample,
+                Err(_) => return Ok(None), // End of stream or error
+            };
             if !slf.stream.is_empty() && slf.stream != sample.stream.name {
                 continue;
             }
@@ -128,7 +130,10 @@ impl PyDevice {
 
     fn _get_metadata<'py>(&self, py: Python<'py>) -> PyResult<PyObject> {
         let mut device = data::Device::new(self.proxy.device_full(self.route.clone()).unwrap());
-        let meta = device.get_metadata();
+        let meta = match device.get_metadata() {
+            Ok(meta) => meta,
+            Err(_) => return Err(PyRuntimeError::new_err("Failed to get metadata")),
+        };
 
         let dict = PyDict::new(py);
 

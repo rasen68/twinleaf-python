@@ -18,7 +18,7 @@ impl PyIter {
         slf
     }
 
-    fn __next__(mut slf: PyRefMut<'_, Self>) -> PyResult<Option<PyObject>> {
+    fn __next__(mut slf: PyRefMut<'_, Self>) -> PyResult<Option<Py<PyAny>>> {
         let dict = PyDict::new(slf.py());
 
         if let Some(ctr) = slf.n {
@@ -128,7 +128,7 @@ impl PyDevice {
         })
     }
 
-    fn _get_metadata<'py>(&self, py: Python<'py>) -> PyResult<PyObject> {
+    fn _get_metadata<'py>(&self, py: Python<'py>) -> PyResult<Py<PyAny>> {
         let mut device = data::Device::new(self.proxy.device_full(self.route.clone()).unwrap());
         let meta = match device.get_metadata() {
             Ok(meta) => meta,

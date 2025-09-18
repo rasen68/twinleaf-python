@@ -21,6 +21,7 @@ impl PyIter {
     fn __next__(mut slf: PyRefMut<'_, Self>) -> PyResult<Option<Py<PyAny>>> {
         let dict = PyDict::new(slf.py());
 
+        // Check if we have a finite count and if it's reached zero
         if let Some(ctr) = slf.n {
             if ctr == 0 {
                 // TODO: drop port
@@ -29,6 +30,7 @@ impl PyIter {
                 slf.n = Some(ctr - 1);
             }
         }
+        // If n is None, we continue indefinitely
 
         while dict.is_empty() {
             // Check for keyboard interrupt
@@ -112,7 +114,7 @@ impl PyDevice {
         }
     }
 
-    #[pyo3(signature = (n=1, stream=None, columns=None))]
+    #[pyo3(signature = (n=None, stream=None, columns=None))]
     fn _samples<'py>(
         &self,
         _py: Python<'py>,

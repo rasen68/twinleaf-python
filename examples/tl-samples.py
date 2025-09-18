@@ -8,5 +8,5 @@ dev = twinleaf.Device()
 columns = ["imu.accel*"] # Wildcard
 # columns = ["imu.accel.x", "imu.accel.y", "imu.accel.z"] # Specific columns
 
-for sample in dev._samples(5, columns):
+for sample in dev._samples(n=None, columns=columns):
        print(sample)

@@ -1,6 +1,6 @@
 # Twinleaf Python (using the Rust backend)
 
-**This library is experimental and under active development; interfaces are subject to change, and it will set your computer on fire.**
+**This library is under active development; interfaces are subject to change.**
 
 **We welcome users to test and provide feedback.**
 

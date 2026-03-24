@@ -1,8 +1,6 @@
-import twinleaf._twinleaf
-import struct
-from .itl import *
+from twinleaf._twinleaf import Device
 
-class Device(_twinleaf.Device):
+class Device(Device):
     def __new__(cls, url=None, route=None, announce=False, instantiate=True):
         device = super().__new__(cls, url, route)
         return device
@@ -31,15 +29,23 @@ class Device(_twinleaf.Device):
                     fstr = '<H'
                 case 4:
                     fstr = '<I'
-        payload = b'' if value is None else struct.pack(fstr, value)
+        payload = b'' if value is None else _struct.pack(fstr, value)
         rep = self._rpc(name, payload)
-        return struct.unpack(fstr, rep)[0]
+
+        import struct
+        val = struct.unpack(fstr, rep)[0]
+        del struct
+        return val
 
     def _rpc_float(self, name: str, size: int, value: float | None = None) -> float:
         fstr = '<f' if (size == 4) else '<d'
-        payload = b'' if value is None else struct.pack(fstr, value)
+        payload = b'' if value is None else _struct.pack(fstr, value)
         rep = self._rpc(name, payload)
-        return struct.unpack(fstr, rep)[0]
+
+        import struct
+        val = struct.unpack(fstr, rep)[0]
+        del struct
+        return val
 
     def _get_rpc_obj(self, name: str, meta: int):
         data_type = (meta & 0xF)
@@ -218,6 +224,6 @@ class Device(_twinleaf.Device):
                 banner = "", 
                 exitmsg = "")
 
-__doc__ = twinleaf.__doc__
-if hasattr(twinleaf, "__all__"):
-    __all__ = twinleaf.__all__
+#__doc__ = twinleaf.__doc__
+#if hasattr(twinleaf, "__all__"):
+#    __all__ = twinleaf.__all__

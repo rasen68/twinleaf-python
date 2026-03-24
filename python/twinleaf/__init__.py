@@ -93,21 +93,18 @@ class Device(_twinleaf.Device):
         return cls
 
     def _instantiate_rpcs(self):
-        n = int.from_bytes(self._rpc("rpc.listinfo", b""), "little")
         cls = self._get_obj_survey(self)
         setattr(self, 'settings', cls())
-        for i in range(n):
-            res = self._rpc("rpc.listinfo", i.to_bytes(2, "little"))
-            meta = int.from_bytes(res[0:2], "little")
-            name = res[2:].decode()
 
-            mname, *prefix = reversed(name.split("."))
+        rpc_list = self._rpc_list()
+        for (name, meta) in rpc_list:
             parent = self.settings
-            survey_prefix = ""
-            if prefix and (prefix[-1] == "rpc"):
-                prefix[-1] = "_rpc"
-            for token in reversed(prefix):
-                survey_prefix += "." + token
+
+            *prefix, mname = name.split('.')
+            if prefix and (prefix[0] == "rpc"):
+                prefix[0] = "_rpc"
+
+            for token in prefix:
                 if not hasattr(parent, token):
                     cls = self._get_obj_survey(token)
                     setattr(parent, token, cls())

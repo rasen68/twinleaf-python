@@ -1,12 +1,13 @@
 use ::twinleaf::tio::*;
+use ::twinleaf::device::*;
 use ::twinleaf::*;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
-use pyo3::types::{PyBytes, PyDict};
+use pyo3::types::{PyBytes, PyDict, PyList};
 
 #[pyclass(name = "DataIterator", subclass)]
 struct PyIter {
-    port: data::Device,
+    port: device::Device,
     n: Option<usize>,
     stream: String,
     columns: Vec<String>,
@@ -84,7 +85,7 @@ impl PyIter {
 struct PyDevice {
     proxy: proxy::Interface,
     route: proto::DeviceRoute,
-    rpc: proxy::Port,
+    rpc: device::RpcClient,
 }
 
 #[pymethods]
@@ -103,14 +104,21 @@ impl PyDevice {
             proto::DeviceRoute::root()
         };
         let proxy = proxy::Interface::new(&root);
-        let rpc = proxy.device_rpc(route.clone()).unwrap();
+        let rpc = RpcClient::open(&proxy, route.clone()).unwrap();
         Ok(PyDevice { proxy, route, rpc })
     }
 
     fn _rpc<'py>(&self, py: Python<'py>, name: &str, req: &[u8]) -> PyResult<Bound<'py, PyBytes>> {
-        match self.rpc.raw_rpc(name, req) {
+        match self.rpc.raw_rpc(&self.route, name, req) {
             Ok(ret) => Ok(PyBytes::new(py, &ret[..])),
             _ => Err(PyRuntimeError::new_err(format!("RPC '{}' failed", name))),
+        }
+    }
+
+    fn _rpc_list<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
+        match self.rpc.rpc_list(&self.route) {
+            Ok(ret) => Ok(PyList::new(py, ret.vec)?),
+            Err(e) => Err(PyRuntimeError::new_err(format!("{:?}", e))),
         }
     }
 
@@ -123,7 +131,7 @@ impl PyDevice {
         columns: Option<Vec<String>>,
     ) -> PyResult<PyIter> {
         Ok(PyIter {
-            port: data::Device::new(self.proxy.device_full(self.route.clone()).unwrap()),
+            port: device::Device::new(self.proxy.device_full(self.route.clone()).unwrap()),
             n: n,
             stream: stream.unwrap_or_default(),
             columns: columns.unwrap_or_default(),
@@ -131,7 +139,7 @@ impl PyDevice {
     }
 
     fn _get_metadata<'py>(&self, py: Python<'py>) -> PyResult<Py<PyAny>> {
-        let mut device = data::Device::new(self.proxy.device_full(self.route.clone()).unwrap());
+        let mut device = device::Device::new(self.proxy.device_full(self.route.clone()).unwrap());
         let meta = match device.get_metadata() {
             Ok(meta) => meta,
             Err(_) => return Err(PyRuntimeError::new_err("Failed to get metadata")),

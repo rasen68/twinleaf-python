@@ -111,7 +111,10 @@ class Device(_twinleaf.Device):
                 parent = getattr(parent, token)
 
             cls = self._get_rpc_obj(name, meta)
-            setattr(parent, mname, cls())
+            rpc = cls()
+            if hasattr(parent, mname):
+                rpc.__dict__ |= getattr(parent, mname).__dict__
+            setattr(parent, mname, rpc)
 
     def _samples_dict(self, n: int = 1, stream: str = "", columns: list[str] = []):
         samples = list(self._samples(n, stream=stream, columns=columns))

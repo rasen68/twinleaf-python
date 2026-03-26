@@ -27,7 +27,6 @@ class Device(_twinleaf._Device):
         payload = b'' if value is None else struct.pack(fstr, value)
         rep = self._rpc(name, payload)
         val = struct.unpack(fstr, rep)[0]
-        del struct
         return val
 
     def _rpc_float(self, name: str, size: int, value: float | None = None) -> float:
@@ -37,13 +36,12 @@ class Device(_twinleaf._Device):
         payload = b'' if value is None else struct.pack(fstr, value)
         rep = self._rpc(name, payload)
         val = struct.unpack(fstr, rep)[0]
-        del struct
         return val
 
     def _instantiate_rpcs(self):
         """ Set up Device.samples, then recursively instantiate RPCs """
         self._registry = self._rpc_registry()
-        self.settings = _RpcSurvey('settings')
+        self.settings = _RpcSurvey('settings', self)
         self._instantiate_rpcs_recursive(self.settings)
 
     def _instantiate_rpcs_recursive(self, parent, prefix=''):

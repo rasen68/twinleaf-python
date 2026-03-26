@@ -1,6 +1,7 @@
 from twinleaf import _twinleaf
 
 class Device(_twinleaf._Device):
+    """ Primary TIO interface with sensor object """
     def __new__(cls, url=None, route=None, announce=False, instantiate=True):
         device = super().__new__(cls, url, route)
         return device
@@ -12,6 +13,7 @@ class Device(_twinleaf._Device):
             self._instantiate_samples(announce)
 
     def _rpc_int(self, name: str, size: int, signed: bool, value: int | None = None) -> int:
+        """ Use struct to send int-typed RPCs """
         import struct
         match size, signed:
             case 1, True: fstr = '<b'
@@ -27,6 +29,7 @@ class Device(_twinleaf._Device):
         return val
 
     def _rpc_float(self, name: str, size: int, value: float | None = None) -> float:
+        """ Use struct to send float-typed RPCs """
         import struct
         fstr = '<f' if (size == 4) else '<d'
         payload = b'' if value is None else struct.pack(fstr, value)
@@ -36,11 +39,13 @@ class Device(_twinleaf._Device):
         return val
 
     def _instantiate_rpcs(self):
+        """ Set up Device.samples, then recursively instantiate RPCs """
         self._registry = self._rpc_registry()
         self.settings = RpcSurvey('settings')
         self._instantiate_rpcs_recursive(self.settings)
 
     def _instantiate_rpcs_recursive(self, parent, prefix=''):
+        """ Get children from registry, setattr them, then recurse """
         for child_name in self._registry.children_of(prefix):
             full_path = f'{prefix}.{child_name}' if prefix else child_name
             rpc = self._registry.find(full_path)
@@ -157,11 +162,13 @@ class Device(_twinleaf._Device):
 
 type _rpc_type = int | float | str | bytes | None
 class _RpcNode:
+    """ Base class for RPCs and surveys in the device tree """
     def __init__(self, name, device: Device):
         self.__name__ = name
         self._device = device
 
     def survey(self) -> dict[str, _rpc_type]:
+        """ Recursively collect all readable RPC values in this subtree """
         results = {}
         for name, attr in self.__dict__.items():
             if isinstance(attr, _RpcNode):
@@ -175,6 +182,7 @@ class _RpcNode:
         return results
 
 class _RpcBase(_RpcNode):
+    """ Internal base class for RPCs """
     def __init__(self, pyrpc: _twinleaf._Rpc, device: Device):
         super().__init__(pyrpc.name, device)
         self._size_bytes = pyrpc.size_bytes
@@ -217,6 +225,7 @@ class _RpcBase(_RpcNode):
                 raise TypeError(f"Invalid RPC type {other}, RPC types must be {_rpc_type}")
 
 class _RpcSurveyBase(_RpcNode):
+    """ Internal class for RPC surveys """
     def __init__(self, name: str, device: Device):
         super().__init__(name, device)
 
@@ -224,6 +233,7 @@ class _RpcSurveyBase(_RpcNode):
         return self.survey()
 
 def _Rpc(pyrpc: _twinleaf._Rpc, device: Device) -> _RpcNode:
+    """ Factory function that creates an RPC with appropriate __call__ signature """
     if pyrpc.writable:
         def __call__(self, arg=None) -> _rpc_type:
             if arg is None:
@@ -238,5 +248,6 @@ def _Rpc(pyrpc: _twinleaf._Rpc, device: Device) -> _RpcNode:
     return cls(pyrpc, device)
 
 def _RpcSurvey(name: str) -> _RpcNode:
+    """ Factory function that creates an RPC survey """
     cls = type('Survey', (_RpcSurveyBase,), {})
     return cls(name, device)

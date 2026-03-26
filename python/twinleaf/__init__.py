@@ -41,7 +41,7 @@ class Device(_twinleaf._Device):
     def _instantiate_rpcs(self):
         """ Set up Device.samples, then recursively instantiate RPCs """
         self._registry = self._rpc_registry()
-        self.settings = RpcSurvey('settings')
+        self.settings = _RpcSurvey('settings')
         self._instantiate_rpcs_recursive(self.settings)
 
     def _instantiate_rpcs_recursive(self, parent, prefix=''):
@@ -52,9 +52,9 @@ class Device(_twinleaf._Device):
             attr_name = '_rpc' if child_name == 'rpc' else child_name
 
             if rpc is not None:
-                child = Rpc(rpc, self)
+                child = _Rpc(rpc, self)
             else:
-                child = RpcSurvey(attr_name)
+                child = _RpcSurvey(attr_name, self)
             setattr(parent, attr_name, child)
             self._instantiate_rpcs_recursive(child, full_path)
 
@@ -247,7 +247,7 @@ def _Rpc(pyrpc: _twinleaf._Rpc, device: Device) -> _RpcNode:
     cls = type('Rpc', (_RpcBase,), {'__call__': __call__})
     return cls(pyrpc, device)
 
-def _RpcSurvey(name: str) -> _RpcNode:
+def _RpcSurvey(name: str, device: Device) -> _RpcNode:
     """ Factory function that creates an RPC survey """
     cls = type('Survey', (_RpcSurveyBase,), {})
     return cls(name, device)

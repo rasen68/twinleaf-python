@@ -60,7 +60,7 @@ class Device(_twinleaf._Device):
 
     def _samples_dict(self, n: int = 1, stream: str = "", columns: list[str] = []):
         samples = list(self._samples(n, stream=stream, columns=columns))
-        # bin into streams
+        # Bin into streams
         streams = {}
         for line in samples:
             stream_id = line.pop("stream", None)
@@ -72,57 +72,56 @@ class Device(_twinleaf._Device):
                 streams[stream_id][key].append(value)
         return streams
 
-    def _samples_list(self, n: int = 1, stream: str = "", columns: list[str] = [], timeColumn = True, titleRow = True):
+    def _samples_list(self, n: int = 1, stream: str = "", columns: list[str] = [], time_column = True, title_row = True):
         streams = self._samples_dict(n, stream, columns)
         # Convert to list with rows of data. Not super happy about how inefficient this is. 
         if len(streams.items()) > 1:
             raise NotImplementedError("Stream concatenation not yet implemented for two different streams")
         stream = list(streams.values())[0]
         stream.pop('stream')
-        if not timeColumn:
+        if not time_column:
             stream.pop('time')
-        dataColumns = [column for column in stream.values() ]
-        dataRows = [list(row) for row in zip(*dataColumns)]
-        if titleRow:
-            columnNames = list(stream.keys());
-            dataRows.insert(0,columnNames)
-        return dataRows
+        data_columns = [column for column in stream.values() ]
+        data_rows = [list(row) for row in zip(*data_columns)]
+        if title_row:
+            column_names = list(stream.keys());
+            data_rows.insert(0,column_names)
+        return data_rows
 
-    def _instantiate_samples(self, announce: bool = False):
+    def _instantiate_samples(self, announce: bool=False):
         metadata = self._get_metadata()
-        dev_meta = metadata['device']
         if announce:
+            dev_meta = metadata['device']
             print(f"{dev_meta['name']} ({dev_meta['serial_number']}) [{dev_meta['firmware_hash']}]")
+
         streams_flattened = []
         for stream, value in metadata['streams'].items():
             for column_name in value['columns'].keys():
                 streams_flattened.append(stream+"."+column_name)
 
         # All samples
-        self.samples = _SamplesDict(self, "samples", stream="", columns=[]))
+        self.samples = _SamplesDict(self, "samples", stream="", columns=[])
 
         for stream_column in streams_flattened:
-            mname, *prefix, stream = reversed(stream_column.split("."))
+            stream, *prefix, mname = stream_column.split(".")
             parent = self.samples
 
+            # All samples for this stream
             if not hasattr(parent, stream):
-                # All samples for this stream
-                setattr(parent, stream, _SamplesList(self, stream, stream=stream, columns=[]))
+                setattr(parent, stream, _SamplesList(self, name=stream, stream=stream, columns=[]))
             parent = getattr(parent, stream)
 
+            # Wildcard columns within stream
             stream_prefix = ""
-            for token in reversed(prefix):
-
+            for token in prefix:
                 stream_prefix += "." + token
                 if not hasattr(parent, token):
-                    #wildcard columns
-                    setattr(parent, token, _SamplesList(self, token, stream=stream, columns=[stream_prefix[1:]+".*"]))
+                    setattr(parent, token, _SamplesList(self, token, stream, columns=[stream_prefix[1:]+".*"]))
                 parent = getattr(parent, token)
 
-            # specific stream samples
+            # Specific stream samples
             stream, column_name = stream_column.split(".",1)
-
-            setattr(parent, mname, _SamplesList(self, mname, stream=stream, columns=[column_name]))
+            setattr(parent, mname, _SamplesList(self, mname, stream, columns=[column_name]))
 
     def _interact(self):
         imported_objects = {}

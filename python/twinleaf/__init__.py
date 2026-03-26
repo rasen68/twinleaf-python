@@ -17,9 +17,11 @@ class Device(_Device):
             case 1, True: fstr = '<b'
             case 2, True: fstr = '<h'
             case 4, True: fstr = '<i'
+            case 8, True: fstr = '<q'
             case 1, False: fstr = '<B'
             case 2, False: fstr = '<H'
             case 4, False: fstr = '<I'
+            case 8, False: fstr = '<Q'
         payload = b'' if value is None else struct.pack(fstr, value)
         rep = self._rpc(name, payload)
         val = struct.unpack(fstr, rep)[0]

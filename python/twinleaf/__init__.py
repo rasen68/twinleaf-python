@@ -88,20 +88,6 @@ class Device(_twinleaf._Device):
             dataRows.insert(0,columnNames)
         return dataRows
 
-    def _get_obj_samples_dict(self, name: str, stream: str = "", columns: list[str] = [], *args, **kwargs):
-        def samples_method(local_self, *args, **kwargs):
-            # print(f"Sampling {name} from stream {stream} with columns {columns}")
-            return self._samples_dict(stream=stream, columns=columns, *args, **kwargs)
-        cls = type('samplesDict'+name,(), {'__name__':name, '__call__':samples_method})
-        return cls
-
-    def _get_obj_samples_list(self, name: str, stream: str = "", columns: list[str] = [], *args, **kwargs):
-        def samples_method(local_self, *args, **kwargs):
-            # print(f"Sampling {name} from stream {stream} with columns {columns}")
-            return self._samples_list(stream=stream, columns=columns, *args, **kwargs)
-        cls = type('samplesList'+name,(), {'__name__':name, '__call__':samples_method})
-        return cls
-
     def _instantiate_samples(self, announce: bool = False):
         metadata = self._get_metadata()
         dev_meta = metadata['device']
@@ -112,9 +98,8 @@ class Device(_twinleaf._Device):
             for column_name in value['columns'].keys():
                 streams_flattened.append(stream+"."+column_name)
 
-        # All samples        
-        cls = self._get_obj_samples_dict("samples", stream="", columns=[])
-        setattr(self, 'samples', cls())
+        # All samples
+        self.samples = _SamplesDict(self, "samples", stream="", columns=[]))
 
         for stream_column in streams_flattened:
             mname, *prefix, stream = reversed(stream_column.split("."))
@@ -122,25 +107,22 @@ class Device(_twinleaf._Device):
 
             if not hasattr(parent, stream):
                 # All samples for this stream
-                cls = self._get_obj_samples_list(stream, stream=stream, columns=[])
-                setattr(parent, stream, cls())
+                setattr(parent, stream, _SamplesList(self, stream, stream=stream, columns=[]))
             parent = getattr(parent, stream)
 
             stream_prefix = ""
             for token in reversed(prefix):
-                
+
                 stream_prefix += "." + token
                 if not hasattr(parent, token):
                     #wildcard columns
-                    cls = self._get_obj_samples_list(token, stream=stream, columns=[stream_prefix[1:]+".*"])
-                    setattr(parent, token, cls())
+                    setattr(parent, token, _SamplesList(self, token, stream=stream, columns=[stream_prefix[1:]+".*"]))
                 parent = getattr(parent, token)
 
             # specific stream samples
             stream, column_name = stream_column.split(".",1)
 
-            cls = self._get_obj_samples_list(mname, stream=stream, columns=[column_name])
-            setattr(parent, mname, cls())
+            setattr(parent, mname, _SamplesList(self, mname, stream=stream, columns=[column_name]))
 
     def _interact(self):
         imported_objects = {}
@@ -251,3 +233,30 @@ def _RpcSurvey(name: str, device: Device) -> _RpcNode:
     """ Factory function that creates an RPC survey """
     cls = type('Survey', (_RpcSurveyBase,), {})
     return cls(name, device)
+
+# Samples classes
+class _SamplesBase:
+    """ Base class for sample objects """
+    def __init__(self, device: Device, name: str, stream: str, columns: list[str]):
+        self._device = device
+        self.__name__ = name
+        self._stream = stream
+        self._columns = columns
+
+class _SamplesDictBase(_SamplesBase):
+    """ Returns samples as dict keyed by stream_id """
+    def __call__(self, n: int = 1, **kwargs):
+        return self._device._samples_dict(n, self._stream, self._columns, **kwargs)
+
+class _SamplesListBase(_SamplesBase):
+    """ Returns samples as list for single stream """
+    def __call__(self, n: int = 1, **kwargs):
+        return self._device._samples_list(n, self._stream, self._columns, **kwargs)
+
+def _SamplesDict(device: Device, name: str, stream: str = "", columns: list[str] = []):
+    """ Factory function that creates a sample dict """
+    return _SamplesDictBase(device, name, stream, columns)
+
+def _SamplesList(device: Device, name: str, stream: str = "", columns: list[str] = []):
+    """ Factory function that creates a sample list """
+    return _SamplesListBase(device, name, stream, columns)

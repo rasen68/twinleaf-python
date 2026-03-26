@@ -35,80 +35,23 @@ class Device(_twinleaf._Device):
         del struct
         return val
 
-    def _get_rpc_obj(self, name: str, meta: int):
-        data_type = (meta & 0xF)
-        data_size = (meta >> 4) & 0xF
-        if (meta & 0x8000) == 0:
-            def rpc_method(local_self, arg: bytes = b'') -> bytes:
-                return self._rpc(name, arg)
-        elif data_size == 0:
-            def rpc_method(local_self) -> None:
-                return self._rpc(name, b'')
-        elif data_type in (0, 1):
-            signed = (data_type) == 1
-            if (meta & 0x0200) == 0:
-                def rpc_method(local_self) -> int:
-                    return self._rpc_int(name, data_size, signed)
-            else:
-                def rpc_method(local_self, arg: int | None = None) -> int:
-                    return self._rpc_int(name, data_size, signed, arg)
-        elif data_type == 2:
-            if (meta & 0x0200) == 0:
-                def rpc_method(local_self) -> float:
-                    return self._rpc_float(name, data_size)
-            else:
-                def rpc_method(local_self, arg: float | None = None) -> float:
-                    return self._rpc_float(name, data_size, arg)
-        elif data_type == 3:
-            if (meta & 0x0200) == 0:
-                def rpc_method(local_self) -> str:
-                    return self._rpc(name, b'').decode()
-            else:
-                def rpc_method(local_self, arg: str | None = None) -> str:
-                    return self._rpc(name, arg.encode()).decode()
-        cls = type('rpc',(), {'__name__':name, '__call__':rpc_method, '_data_type':data_type, '_data_size':data_size})
-        return cls
-
-    def _get_obj_survey(self, name: str):
-        def survey(local_self):
-            survey = {}
-            for name, attr in local_self.__dict__.items():
-                if callable(attr):
-                    if hasattr(attr, '_data_type'):
-                        # don't call actions like reset, stop, etc.
-                        if attr._data_type > 0 or attr._data_size > 0:
-                            survey[attr.__name__] = attr()
-                    else:
-                        if attr.__class__.__name__ == 'survey':
-                            subsurvey = attr()
-                            survey = {**survey, **subsurvey}
-            return survey
-        cls = type('survey',(), {'__name__':name, '__call__':survey})
-        return cls
-
     def _instantiate_rpcs(self):
-        cls = self._get_obj_survey(self)
-        setattr(self, 'settings', cls())
+        self._registry = self._rpc_registry()
+        self.settings = RpcSurvey('settings')
+        self._instantiate_rpcs_recursive(self.settings)
 
-        rpc_list = self._rpc_list()
-        for (name, meta) in rpc_list:
-            parent = self.settings
+    def _instantiate_rpcs_recursive(self, parent, prefix=''):
+        for child_name in self._registry.children_of(prefix):
+            full_path = f'{prefix}.{child_name}' if prefix else child_name
+            rpc = self._registry.find(full_path)
+            attr_name = '_rpc' if child_name == 'rpc' else child_name
 
-            *prefix, mname = name.split('.')
-            if prefix and (prefix[0] == "rpc"):
-                prefix[0] = "_rpc"
-
-            for token in prefix:
-                if not hasattr(parent, token):
-                    cls = self._get_obj_survey(token)
-                    setattr(parent, token, cls())
-                parent = getattr(parent, token)
-
-            cls = self._get_rpc_obj(name, meta)
-            rpc = cls()
-            if hasattr(parent, mname):
-                rpc.__dict__ |= getattr(parent, mname).__dict__
-            setattr(parent, mname, rpc)
+            if rpc is not None:
+                child = Rpc(rpc, self)
+            else:
+                child = RpcSurvey(attr_name)
+            setattr(parent, attr_name, child)
+            self._instantiate_rpcs_recursive(child, full_path)
 
     def _samples_dict(self, n: int = 1, stream: str = "", columns: list[str] = []):
         samples = list(self._samples(n, stream=stream, columns=columns))
@@ -211,3 +154,89 @@ class Device(_twinleaf._Device):
             repl.interact(
                 banner = "", 
                 exitmsg = "")
+
+type _rpc_type = int | float | str | bytes | None
+class _RpcNode:
+    def __init__(self, name, device: Device):
+        self.__name__ = name
+        self._device = device
+
+    def survey(self) -> dict[str, _rpc_type]:
+        results = {}
+        for name, attr in self.__dict__.items():
+            if isinstance(attr, _RpcNode):
+                # Check if it's an RPC that should be read
+                if isinstance(attr, _RpcBase):
+                    if attr._readable and attr._data_type is not None:
+                        results[attr.__name__] = attr()
+
+                # Recursively survey children (works for both Rpc and Survey)
+                results |= attr.survey()
+        return results
+
+class _RpcBase(_RpcNode):
+    def __init__(self, pyrpc: _twinleaf._Rpc, device: Device):
+        super().__init__(pyrpc.name, device)
+        self._size_bytes = pyrpc.size_bytes
+        self._readable   = pyrpc.readable
+        self._writable   = pyrpc.writable
+        match pyrpc.type_str:
+            case _ if _.startswith('i'): self._data_type, self._signed = int, True
+            case _ if _.startswith('u'): self._data_type, self._signed = int, False
+            case _ if _.startswith('f'): self._data_type = float
+            case _ if _.startswith('s'): self._data_type = str
+            case '' if self._size_bytes == 0: self._data_type = None
+            case other: self._data_type = bytes
+
+    def _call_with_arg(self, arg=None) -> _rpc_type:
+        match self._data_type:
+            case _ if _ is int:
+                return self._device._rpc_int(self.__name__, self._size_bytes, self._signed, arg)
+            case _ if _ is float:
+                return self._device._rpc_float(self.__name__, self._size_bytes, arg)
+            case _ if _ is str:
+                return self._device._rpc(self.__name__, arg.encode()).decode()
+            case _ if _ is bytes:
+                return self._device._rpc(self.__name__, arg)
+            case None:
+                return self._device._rpc(self.__name__, b'')
+            case other:
+                raise TypeError(f"Invalid RPC type {other}, RPC types must be {_rpc_type}")
+
+    def _call(self) -> _rpc_type:
+        match self._data_type:
+            case _ if _ is int:
+                return self._device._rpc_int(self.__name__, self._size_bytes, self._signed)
+            case _ if _ is float:
+                return self._device._rpc_float(self.__name__, self._size_bytes)
+            case _ if _ is str:
+                return self._device._rpc(self.__name__, b'').decode()
+            case _ if _ is bytes | None:
+                return self._device._rpc(self.__name__, b'')
+            case other:
+                raise TypeError(f"Invalid RPC type {other}, RPC types must be {_rpc_type}")
+
+class _RpcSurveyBase(_RpcNode):
+    def __init__(self, name: str, device: Device):
+        super().__init__(name, device)
+
+    def __call__(self):
+        return self.survey()
+
+def _Rpc(pyrpc: _twinleaf._Rpc, device: Device) -> _RpcNode:
+    if pyrpc.writable:
+        def __call__(self, arg=None) -> _rpc_type:
+            if arg is None:
+                return self._call()
+            else:
+                return self._call_with_arg(arg)
+    else:
+        def __call__(self) -> _rpc_type:
+            return self._call()
+
+    cls = type('Rpc', (_RpcBase,), {'__call__': __call__})
+    return cls(pyrpc, device)
+
+def _RpcSurvey(name: str) -> _RpcNode:
+    cls = type('Survey', (_RpcSurveyBase,), {})
+    return cls(name, device)

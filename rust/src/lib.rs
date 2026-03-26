@@ -1,11 +1,10 @@
 use ::twinleaf::tio::*;
-use ::twinleaf::device::*;
 use ::twinleaf::*;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict, PyList};
 
-#[pyclass(name = "DataIterator", subclass)]
+#[pyclass(name = "_DataIterator", subclass)]
 struct PyIter {
     port: device::Device,
     n: Option<usize>,
@@ -81,6 +80,87 @@ impl PyIter {
     }
 }
 
+#[pyclass(name = "_Rpc")]
+#[derive(Clone)]
+struct PyRpc {
+    inner: device::RpcDescriptor,
+}
+
+#[pymethods]
+impl PyRpc {
+    #[getter]
+    fn name(&self) -> String {
+        self.inner.full_name.clone()
+    }
+
+    #[getter]
+    fn readable(&self) -> bool {
+        self.inner.readable
+    }
+
+    #[getter]
+    fn writable(&self) -> bool {
+        self.inner.writable
+    }
+
+    #[getter]
+    fn size_bytes(&self) -> Option<usize> {
+        self.inner.size_bytes()
+    }
+
+    #[getter]
+    fn type_str(&self) -> String {
+        self.inner.type_str()
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "Rpc(name='{}', type='{}', {})",
+            self.inner.full_name,
+            self.inner.type_str(),
+            self.inner.perm_str()
+        )
+    }
+}
+
+#[pyclass(name = "_RpcRegistry")]
+struct PyRegistry {
+    inner: device::RpcRegistry,
+}
+
+#[pymethods]
+impl PyRegistry {
+    fn children_of(&self, prefix: &str) -> Vec<String> {
+        self.inner.children_of(prefix)
+    }
+
+    fn find(&self, name: &str) -> Option<PyRpc> {
+        self.inner.find(name).map(|desc| PyRpc { inner: desc.clone() })
+    }
+
+    fn suggest(&self, query: &str) -> Vec<String> {
+        self.inner.suggest(query)
+    }
+
+    fn search(&self, query: &str) -> Vec<String> {
+        self.inner.search(query)
+    }
+
+    #[getter]
+    fn hash(&self) -> Option<u32> {
+        self.inner.hash
+    }
+
+    fn __repr__(&self) -> String {
+        let count = self.inner.search("").len();
+        if let Some(h) = self.inner.hash {
+            format!("Registry({} RPCs, hash=0x{:08x})", count, h)
+        } else {
+            format!("Registry({} RPCs)", count)
+        }
+    }
+}
+
 #[pyclass(name = "_Device", subclass)]
 struct PyDevice {
     proxy: proxy::Interface,
@@ -104,7 +184,7 @@ impl PyDevice {
             proto::DeviceRoute::root()
         };
         let proxy = proxy::Interface::new(&root);
-        let rpc = RpcClient::open(&proxy, route.clone()).unwrap();
+        let rpc = device::RpcClient::open(&proxy, route.clone()).unwrap();
         Ok(PyDevice { proxy, route, rpc })
     }
 
@@ -118,6 +198,13 @@ impl PyDevice {
     fn _rpc_list<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
         match self.rpc.rpc_list(&self.route) {
             Ok(ret) => Ok(PyList::new(py, ret.vec)?),
+            Err(e) => Err(PyRuntimeError::new_err(format!("{:?}", e))),
+        }
+    }
+
+    fn _rpc_registry(&self) -> PyResult<PyRegistry> {
+        match self.rpc.rpc_list(&self.route) {
+            Ok(list) => Ok(PyRegistry { inner: device::RpcRegistry::from(&list) }),
             Err(e) => Err(PyRuntimeError::new_err(format!("{:?}", e))),
         }
     }
@@ -187,5 +274,7 @@ impl PyDevice {
 #[pymodule]
 fn _twinleaf(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyDevice>()?;
+    m.add_class::<PyRpc>()?;
+    m.add_class::<PyRegistry>()?;
     Ok(())
 }

@@ -1,6 +1,6 @@
-from twinleaf._twinleaf import _Device
+from twinleaf import _twinleaf
 
-class Device(_Device):
+class Device(_twinleaf._Device):
     def __new__(cls, url=None, route=None, announce=False, instantiate=True):
         device = super().__new__(cls, url, route)
         return device

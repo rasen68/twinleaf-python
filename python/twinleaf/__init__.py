@@ -150,6 +150,9 @@ class _RpcNode:
         self.__name__ = name
         self._device = device
 
+    def __call__(self) -> dict[str, _rpc_type]:
+        return self._survey()
+
     def _survey(self) -> dict[str, _rpc_type]:
         """ Recursively collect all readable RPC values in this subtree """
         results = {}
@@ -179,60 +182,42 @@ class _RpcBase(_RpcNode):
             case '' if self._size_bytes == 0: self._data_type = None
             case other: self._data_type = bytes
 
-    def _call_with_arg(self, arg: _rpc_type=None) -> _rpc_type:
+    def _call(self, arg: _rpc_type=None) -> _rpc_type:
         match self._data_type:
             case t if t is int:
                 return self._device._rpc_int(self.__name__, self._size_bytes, self._signed, arg)
             case t if t is float:
                 return self._device._rpc_float(self.__name__, self._size_bytes, arg)
             case t if t is str:
+                if arg is None: arg = ''
                 return self._device._rpc(self.__name__, arg.encode()).decode()
             case t if t is bytes:
+                if arg is None: arg = b''
                 return self._device._rpc(self.__name__, arg)
             case None:
                 return self._device._rpc(self.__name__, b'')
             case other:
                 raise TypeError(f"Invalid RPC type {other}, RPC types must be {_rpc_type}")
 
-    def _call(self) -> _rpc_type:
-        match self._data_type:
-            case t if t is int:
-                return self._device._rpc_int(self.__name__, self._size_bytes, self._signed)
-            case t if t is float:
-                return self._device._rpc_float(self.__name__, self._size_bytes)
-            case t if t is str:
-                return self._device._rpc(self.__name__, b'').decode()
-            case t if t is bytes or _ is None:
-                return self._device._rpc(self.__name__, b'')
-            case other:
-                raise TypeError(f"Invalid RPC type {other}, RPC types must be {_rpc_type}")
-
-class _RpcSurveyBase(_RpcNode):
-    """ Internal class for RPC surveys """
-    def __init__(self, name: str, device: Device):
-        super().__init__(name, device)
-
-    def __call__(self):
-        return self._survey()
-
 def _Rpc(pyrpc: _twinleaf._Rpc, device: Device) -> _RpcNode:
     """ Factory function that creates an RPC with appropriate __call__ signature """
-    if pyrpc.writable:
-        def __call__(self, arg: _rpc_type=None) -> _rpc_type:
-            if arg is None:
-                return self._call()
-            else:
-                return self._call_with_arg(arg)
+    base_rpc = _RpcBase(pyrpc, device)
+    if base_rpc._writable and base_rpc._data_type is not None:
+        def __call__(self, arg=None):
+            return self._call(arg)
+        __call__.__annotations__ |= { 'arg': base_rpc._data_type | None }
+        __call__.__annotations__ |= { 'return': base_rpc._data_type }
     else:
         def __call__(self) -> _rpc_type:
             return self._call()
+        __call__.__annotations__ |= { 'return': base_rpc._data_type }
 
     cls = type('Rpc', (_RpcBase,), {'__call__': __call__})
     return cls(pyrpc, device)
 
 def _RpcSurvey(name: str, device: Device) -> _RpcNode:
     """ Factory function that creates an RPC survey """
-    cls = type('Survey', (_RpcSurveyBase,), {})
+    cls = type('Survey', (_RpcNode,), {})
     return cls(name, device)
 
 # Samples classes
@@ -244,20 +229,18 @@ class _SamplesBase:
         self._stream = stream
         self._columns = columns
 
-class _SamplesDictBase(_SamplesBase):
+class _SamplesDict(_SamplesBase):
     """ Returns samples as dict keyed by stream_id """
+    def __init__(self, device: Device, name: str, stream: str="", columns: list[str] | None=None):
+        super().__init__(device, name, stream, columns if columns is not None else [] )
+
     def __call__(self, n: int=1, **kwargs):
         return self._device._samples_dict(n, self._stream, self._columns, **kwargs)
 
-class _SamplesListBase(_SamplesBase):
+class _SamplesList(_SamplesBase):
     """ Returns samples as list for single stream """
+    def __init__(self, device: Device, name: str, stream: str="", columns: list[str] | None=None):
+        super().__init__(device, name, stream, columns if columns is not None else [] )
+
     def __call__(self, n: int=1, **kwargs):
         return self._device._samples_list(n, self._stream, self._columns, **kwargs)
-
-def _SamplesDict(device: Device, name: str, stream: str="", columns: list[str] | None=None):
-    """ Factory function that creates a sample dict """
-    return _SamplesDictBase(device, name, stream, columns if columns is not None else [])
-
-def _SamplesList(device: Device, name: str, stream: str="", columns: list[str] | None=None):
-    """ Factory function that creates a sample list """
-    return _SamplesListBase(device, name, stream, columns if columns is not None else [])

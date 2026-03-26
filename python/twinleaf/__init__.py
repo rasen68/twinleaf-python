@@ -150,7 +150,7 @@ class _RpcNode:
         self.__name__ = name
         self._device = device
 
-    def survey(self) -> dict[str, _rpc_type]:
+    def _survey(self) -> dict[str, _rpc_type]:
         """ Recursively collect all readable RPC values in this subtree """
         results = {}
         for name, attr in self.__dict__.items():
@@ -161,7 +161,7 @@ class _RpcNode:
                         results[attr.__name__] = attr()
 
                 # Recursively survey children (works for both Rpc and Survey)
-                results |= attr.survey()
+                results |= attr._survey()
         return results
 
 class _RpcBase(_RpcNode):
@@ -179,7 +179,7 @@ class _RpcBase(_RpcNode):
             case '' if self._size_bytes == 0: self._data_type = None
             case other: self._data_type = bytes
 
-    def _call_with_arg(self, arg=None) -> _rpc_type:
+    def _call_with_arg(self, arg: _rpc_type=None) -> _rpc_type:
         match self._data_type:
             case t if t is int:
                 return self._device._rpc_int(self.__name__, self._size_bytes, self._signed, arg)
@@ -213,12 +213,12 @@ class _RpcSurveyBase(_RpcNode):
         super().__init__(name, device)
 
     def __call__(self):
-        return self.survey()
+        return self._survey()
 
 def _Rpc(pyrpc: _twinleaf._Rpc, device: Device) -> _RpcNode:
     """ Factory function that creates an RPC with appropriate __call__ signature """
     if pyrpc.writable:
-        def __call__(self, arg=None) -> _rpc_type:
+        def __call__(self, arg: _rpc_type=None) -> _rpc_type:
             if arg is None:
                 return self._call()
             else:
@@ -246,18 +246,18 @@ class _SamplesBase:
 
 class _SamplesDictBase(_SamplesBase):
     """ Returns samples as dict keyed by stream_id """
-    def __call__(self, n: int = 1, **kwargs):
+    def __call__(self, n: int=1, **kwargs):
         return self._device._samples_dict(n, self._stream, self._columns, **kwargs)
 
 class _SamplesListBase(_SamplesBase):
     """ Returns samples as list for single stream """
-    def __call__(self, n: int = 1, **kwargs):
+    def __call__(self, n: int=1, **kwargs):
         return self._device._samples_list(n, self._stream, self._columns, **kwargs)
 
-def _SamplesDict(device: Device, name: str, stream: str = "", columns: list[str] | None=None):
+def _SamplesDict(device: Device, name: str, stream: str="", columns: list[str] | None=None):
     """ Factory function that creates a sample dict """
     return _SamplesDictBase(device, name, stream, columns if columns is not None else [])
 
-def _SamplesList(device: Device, name: str, stream: str = "", columns: list[str] | None=None):
+def _SamplesList(device: Device, name: str, stream: str="", columns: list[str] | None=None):
     """ Factory function that creates a sample list """
     return _SamplesListBase(device, name, stream, columns if columns is not None else [])

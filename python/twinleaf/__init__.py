@@ -157,7 +157,7 @@ class _RpcNode:
             if isinstance(attr, _RpcNode):
                 # Check if it's an RPC that should be read
                 if isinstance(attr, _RpcBase):
-                    if attr._readable and attr._data_type is not None:
+                    if attr._data_type not in { None, bytes }:
                         results[attr.__name__] = attr()
 
                 # Recursively survey children (works for both Rpc and Survey)
@@ -169,8 +169,8 @@ class _RpcBase(_RpcNode):
     def __init__(self, pyrpc: _twinleaf._Rpc, device: Device):
         super().__init__(pyrpc.name, device)
         self._size_bytes = pyrpc.size_bytes
-        self._readable   = pyrpc.readable
         self._writable   = pyrpc.writable
+        self._data_type: type | None = None
         match pyrpc.type_str:
             case t if t.startswith('i'): self._data_type, self._signed = int, True
             case t if t.startswith('u'): self._data_type, self._signed = int, False

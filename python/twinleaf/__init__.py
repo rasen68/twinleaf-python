@@ -1,6 +1,6 @@
-from twinleaf._twinleaf import Device
+from twinleaf._twinleaf import _Device
 
-class Device(Device):
+class Device(_Device):
     def __new__(cls, url=None, route=None, announce=False, instantiate=True):
         device = super().__new__(cls, url, route)
         return device
@@ -223,7 +223,3 @@ class Device(Device):
             repl.interact(
                 banner = "", 
                 exitmsg = "")
-
-#__doc__ = twinleaf.__doc__
-#if hasattr(twinleaf, "__all__"):
-#    __all__ = twinleaf.__all__

@@ -81,7 +81,7 @@ impl PyIter {
     }
 }
 
-#[pyclass(name = "Device", subclass)]
+#[pyclass(name = "_Device", subclass)]
 struct PyDevice {
     proxy: proxy::Interface,
     route: proto::DeviceRoute,

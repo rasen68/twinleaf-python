@@ -162,7 +162,7 @@ class _RpcNode:
             if isinstance(attr, _RpcNode):
                 # Check if it's an RPC that should be read
                 if isinstance(attr, _RpcBase):
-                    if attr._data_type not in { None, bytes }:
+                    if attr._type not in { None, bytes }:
                         results[attr.__name__] = attr._call()
 
                 # Recursively survey children (works for both Rpc and Survey)
@@ -173,23 +173,37 @@ class _RpcBase(_RpcNode):
     """ Internal base class for RPCs """
     def __init__(self, pyrpc: _twinleaf._Rpc, device: Device):
         super().__init__(pyrpc.name, device)
-        self._size_bytes = pyrpc.size_bytes
+        self._data_size = pyrpc.size_bytes
         self._writable   = pyrpc.writable
-        self._data_type: type | None = None
+        self._type: type | None = None
         match pyrpc.type_str:
-            case t if t.startswith('i'): self._data_type, self._signed = int, True
-            case t if t.startswith('u'): self._data_type, self._signed = int, False
-            case t if t.startswith('f'): self._data_type = float
-            case t if t.startswith('s'): self._data_type = str
-            case '' if self._size_bytes == 0: self._data_type = None
-            case other: self._data_type = bytes
+            case t if t.startswith('u'):
+                self._type = int
+                self._data_type = 0
+                self._signed = False
+            case t if t.startswith('i'):
+                self._type = int
+                self._data_type = 1
+                self._signed = True
+            case t if t.startswith('f'):
+                self._type = float
+                self._data_type = 2
+            case t if t.startswith('s'):
+                self._type = str
+                self._data_type = 3
+            case '' if self._data_size == 0:
+                self._type = None
+                self._data_type = 0
+            case other:
+                self._type = bytes
+                self._data_type = 0
 
     def _call(self, arg: _rpc_type=None) -> _rpc_type:
-        match self._data_type:
+        match self._type:
             case t if t is int:
-                return self._device._rpc_int(self.__name__, self._size_bytes, self._signed, arg)
+                return self._device._rpc_int(self.__name__, self._data_size, self._signed, arg)
             case t if t is float:
-                return self._device._rpc_float(self.__name__, self._size_bytes, arg)
+                return self._device._rpc_float(self.__name__, self._data_size, arg)
             case t if t is str:
                 if arg is None: arg = ''
                 return self._device._rpc(self.__name__, arg.encode()).decode()
@@ -204,15 +218,15 @@ class _RpcBase(_RpcNode):
 def _Rpc(pyrpc: _twinleaf._Rpc, device: Device) -> _RpcNode:
     """ Factory function that creates an RPC with appropriate __call__ signature """
     base_rpc = _RpcBase(pyrpc, device)
-    if base_rpc._writable and base_rpc._data_type is not None:
+    if base_rpc._writable and base_rpc._type is not None:
         def __call__(self, arg=None):
             return self._call(arg)
-        __call__.__annotations__ |= { 'arg': base_rpc._data_type | None }
-        __call__.__annotations__ |= { 'return': base_rpc._data_type }
+        __call__.__annotations__ |= { 'arg': base_rpc._type | None }
+        __call__.__annotations__ |= { 'return': base_rpc._type }
     else:
         def __call__(self) -> _rpc_type:
             return self._call()
-        __call__.__annotations__ |= { 'return': base_rpc._data_type }
+        __call__.__annotations__ |= { 'return': base_rpc._type }
 
     cls = type('Rpc', (_RpcBase,), {'__call__': __call__})
     return cls(pyrpc, device)

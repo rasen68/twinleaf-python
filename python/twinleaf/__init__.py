@@ -58,7 +58,8 @@ class Device(_twinleaf._Device):
             setattr(parent, attr_name, child)
             self._instantiate_rpcs_recursive(child, full_path)
 
-    def _samples_dict(self, n: int = 1, stream: str = "", columns: list[str] = []):
+    def _samples_dict(self, n: int = 1, stream: str = "", columns: list[str] | None=None):
+        if columns is None: columns = [] # Avoid mutable default
         samples = list(self._samples(n, stream=stream, columns=columns))
         # Bin into streams
         streams = {}
@@ -72,7 +73,8 @@ class Device(_twinleaf._Device):
                 streams[stream_id][key].append(value)
         return streams
 
-    def _samples_list(self, n: int = 1, stream: str = "", columns: list[str] = [], time_column = True, title_row = True):
+    def _samples_list(self, n: int = 1, stream: str = "", columns: list[str] | None=None, time_column = True, title_row = True):
+        if columns is None: columns = [] # Avoid mutable default
         streams = self._samples_dict(n, stream, columns)
         # Convert to list with rows of data. Not super happy about how inefficient this is. 
         if len(streams.items()) > 1:
@@ -84,7 +86,7 @@ class Device(_twinleaf._Device):
         data_columns = [column for column in stream.values() ]
         data_rows = [list(row) for row in zip(*data_columns)]
         if title_row:
-            column_names = list(stream.keys());
+            column_names = list(stream.keys())
             data_rows.insert(0,column_names)
         return data_rows
 
@@ -200,7 +202,7 @@ class _RpcBase(_RpcNode):
                 return self._device._rpc_float(self.__name__, self._size_bytes)
             case _ if _ is str:
                 return self._device._rpc(self.__name__, b'').decode()
-            case _ if _ is bytes | None:
+            case _ if _ is bytes or _ is None:
                 return self._device._rpc(self.__name__, b'')
             case other:
                 raise TypeError(f"Invalid RPC type {other}, RPC types must be {_rpc_type}")
@@ -252,10 +254,10 @@ class _SamplesListBase(_SamplesBase):
     def __call__(self, n: int = 1, **kwargs):
         return self._device._samples_list(n, self._stream, self._columns, **kwargs)
 
-def _SamplesDict(device: Device, name: str, stream: str = "", columns: list[str] = []):
+def _SamplesDict(device: Device, name: str, stream: str = "", columns: list[str] | None=None):
     """ Factory function that creates a sample dict """
-    return _SamplesDictBase(device, name, stream, columns)
+    return _SamplesDictBase(device, name, stream, columns if columns is not None else [])
 
-def _SamplesList(device: Device, name: str, stream: str = "", columns: list[str] = []):
+def _SamplesList(device: Device, name: str, stream: str = "", columns: list[str] | None=None):
     """ Factory function that creates a sample list """
-    return _SamplesListBase(device, name, stream, columns)
+    return _SamplesListBase(device, name, stream, columns if columns is not None else [])

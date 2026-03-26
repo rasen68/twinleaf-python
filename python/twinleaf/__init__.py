@@ -131,16 +131,16 @@ class Device(_Device):
         # Convert to list with rows of data. Not super happy about how inefficient this is.
         if len(streams.items()) > 1:
             raise NotImplementedError("Stream concatenation not yet implemented for two different streams")
-        stream = list(streams.values())[0]
-        stream.pop('stream')
-        if not timeColumn:
-            stream.pop('time')
-        dataColumns = [column for column in stream.values() ]
-        dataRows = [list(row) for row in zip(*dataColumns)]
-        if titleRow:
-            columnNames = list(stream.keys());
-            dataRows.insert(0,columnNames)
-        return dataRows
+        stream_dict = list(streams.values())[0]
+        stream_dict.pop('stream')
+        if not time_column:
+            stream_dict.pop('time')
+        data_columns = [column for column in stream_dict.values() ]
+        data_rows = [list(row) for row in zip(*data_columns)]
+        if title_row:
+            column_names = list(stream_dict.keys())
+            data_rows.insert(0,column_names)
+        return data_rows
 
     def _get_obj_samples_dict(self, name: str, stream: str="", columns: list[str] | None=None, *args, **kwargs):
         if columns is None: columns = []

@@ -79,14 +79,14 @@ class Device(_twinleaf._Device):
         # Convert to list with rows of data. Not super happy about how inefficient this is. 
         if len(streams.items()) > 1:
             raise NotImplementedError("Stream concatenation not yet implemented for two different streams")
-        stream = list(streams.values())[0]
-        stream.pop('stream')
+        stream_dict = list(streams.values())[0]
+        stream_dict.pop('stream')
         if not time_column:
-            stream.pop('time')
-        data_columns = [column for column in stream.values() ]
+            stream_dict.pop('time')
+        data_columns = [column for column in stream_dict.values() ]
         data_rows = [list(row) for row in zip(*data_columns)]
         if title_row:
-            column_names = list(stream.keys())
+            column_names = list(stream_dict.keys())
             data_rows.insert(0,column_names)
         return data_rows
 

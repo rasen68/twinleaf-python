@@ -11,7 +11,7 @@ class Device(_Device):
             self._instantiate_rpcs()
             self._instantiate_samples(announce)
 
-    def _rpc_int(self, name: str, size: int, signed: bool, value: int | None = None) -> int:
+    def _rpc_int(self, name: str, size: int, signed: bool, value: int | None=None) -> int:
         import struct
         match size, signed:
             case 1, True: fstr = '<b'
@@ -25,16 +25,14 @@ class Device(_Device):
         payload = b'' if value is None else struct.pack(fstr, value)
         rep = self._rpc(name, payload)
         val = struct.unpack(fstr, rep)[0]
-        del struct
         return val
 
-    def _rpc_float(self, name: str, size: int, value: float | None = None) -> float:
+    def _rpc_float(self, name: str, size: int, value: float | None=None) -> float:
         import struct
         fstr = '<f' if (size == 4) else '<d'
         payload = b'' if value is None else struct.pack(fstr, value)
         rep = self._rpc(name, payload)
         val = struct.unpack(fstr, rep)[0]
-        del struct
         return val
 
     def _get_rpc_obj(self, name: str, meta: int):
@@ -112,7 +110,8 @@ class Device(_Device):
                 rpc.__dict__ |= getattr(parent, mname).__dict__
             setattr(parent, mname, rpc)
 
-    def _samples_dict(self, n: int = 1, stream: str = "", columns: list[str] = []):
+    def _samples_dict(self, n: int=1, stream: str="", columns: list[str] | None=None):
+        if columns is None: columns = []
         samples = list(self._samples(n, stream=stream, columns=columns))
         # bin into streams
         streams = {}
@@ -126,9 +125,10 @@ class Device(_Device):
                 streams[stream_id][key].append(value)
         return streams
 
-    def _samples_list(self, n: int = 1, stream: str = "", columns: list[str] = [], timeColumn = True, titleRow = True):
+    def _samples_list(self, n: int=1, stream: str="", columns: list[str] | None=None, timeColumn=True, titleRow=True):
+        if columns is None: columns = []
         streams = self._samples_dict(n, stream, columns)
-        # Convert to list with rows of data. Not super happy about how inefficient this is. 
+        # Convert to list with rows of data. Not super happy about how inefficient this is.
         if len(streams.items()) > 1:
             raise NotImplementedError("Stream concatenation not yet implemented for two different streams")
         stream = list(streams.values())[0]
@@ -142,21 +142,22 @@ class Device(_Device):
             dataRows.insert(0,columnNames)
         return dataRows
 
-    def _get_obj_samples_dict(self, name: str, stream: str = "", columns: list[str] = [], *args, **kwargs):
+    def _get_obj_samples_dict(self, name: str, stream: str="", columns: list[str] | None=None, *args, **kwargs):
+        if columns is None: columns = []
         def samples_method(local_self, *args, **kwargs):
             # print(f"Sampling {name} from stream {stream} with columns {columns}")
             return self._samples_dict(stream=stream, columns=columns, *args, **kwargs)
         cls = type('samplesDict'+name,(), {'__name__':name, '__call__':samples_method})
         return cls
 
-    def _get_obj_samples_list(self, name: str, stream: str = "", columns: list[str] = [], *args, **kwargs):
+    def _get_obj_samples_list(self, name: str, stream: str="", columns: list[str] | None=None = [], *args, **kwargs):
         def samples_method(local_self, *args, **kwargs):
             # print(f"Sampling {name} from stream {stream} with columns {columns}")
             return self._samples_list(stream=stream, columns=columns, *args, **kwargs)
         cls = type('samplesList'+name,(), {'__name__':name, '__call__':samples_method})
         return cls
 
-    def _instantiate_samples(self, announce: bool = False):
+    def _instantiate_samples(self, announce: bool=False):
         metadata = self._get_metadata()
         dev_meta = metadata['device']
         if announce:
@@ -166,7 +167,7 @@ class Device(_Device):
             for column_name in value['columns'].keys():
                 streams_flattened.append(stream+"."+column_name)
 
-        # All samples        
+        # All samples
         cls = self._get_obj_samples_dict("samples", stream="", columns=[])
         setattr(self, 'samples', cls())
 
@@ -182,7 +183,7 @@ class Device(_Device):
 
             stream_prefix = ""
             for token in reversed(prefix):
-                
+
                 stream_prefix += "." + token
                 if not hasattr(parent, token):
                     #wildcard columns
@@ -202,8 +203,8 @@ class Device(_Device):
         try:
             import IPython
             IPython.embed(
-                user_ns=imported_objects, 
-                banner1="", 
+                user_ns=imported_objects,
+                banner1="",
                 banner2="", # Use   : {self._shortname}.<tab>
                 exit_msg="",
                 enable_tip=False)
@@ -211,5 +212,5 @@ class Device(_Device):
             import code
             repl = code.InteractiveConsole(locals=imported_objects)
             repl.interact(
-                banner = "", 
+                banner = "",
                 exitmsg = "")

@@ -1,6 +1,6 @@
-from twinleaf._twinleaf import _Device
+from twinleaf import _twinleaf
 
-class Device(_Device):
+class Device(_twinleaf._Device):
     def __new__(cls, url=None, route=None, announce=False, instantiate=True):
         device = super().__new__(cls, url, route)
         return device
@@ -150,7 +150,7 @@ class Device(_Device):
         cls = type('samplesDict'+name,(), {'__name__':name, '__call__':samples_method})
         return cls
 
-    def _get_obj_samples_list(self, name: str, stream: str="", columns: list[str] | None=None = [], *args, **kwargs):
+    def _get_obj_samples_list(self, name: str, stream: str="", columns: list[str] | None=None, *args, **kwargs):
         def samples_method(local_self, *args, **kwargs):
             # print(f"Sampling {name} from stream {stream} with columns {columns}")
             return self._samples_list(stream=stream, columns=columns, *args, **kwargs)

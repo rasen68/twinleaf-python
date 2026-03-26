@@ -172,22 +172,22 @@ class _RpcBase(_RpcNode):
         self._readable   = pyrpc.readable
         self._writable   = pyrpc.writable
         match pyrpc.type_str:
-            case _ if _.startswith('i'): self._data_type, self._signed = int, True
-            case _ if _.startswith('u'): self._data_type, self._signed = int, False
-            case _ if _.startswith('f'): self._data_type = float
-            case _ if _.startswith('s'): self._data_type = str
+            case t if t.startswith('i'): self._data_type, self._signed = int, True
+            case t if t.startswith('u'): self._data_type, self._signed = int, False
+            case t if t.startswith('f'): self._data_type = float
+            case t if t.startswith('s'): self._data_type = str
             case '' if self._size_bytes == 0: self._data_type = None
             case other: self._data_type = bytes
 
     def _call_with_arg(self, arg=None) -> _rpc_type:
         match self._data_type:
-            case _ if _ is int:
+            case t if t is int:
                 return self._device._rpc_int(self.__name__, self._size_bytes, self._signed, arg)
-            case _ if _ is float:
+            case t if t is float:
                 return self._device._rpc_float(self.__name__, self._size_bytes, arg)
-            case _ if _ is str:
+            case t if t is str:
                 return self._device._rpc(self.__name__, arg.encode()).decode()
-            case _ if _ is bytes:
+            case t if t is bytes:
                 return self._device._rpc(self.__name__, arg)
             case None:
                 return self._device._rpc(self.__name__, b'')
@@ -196,13 +196,13 @@ class _RpcBase(_RpcNode):
 
     def _call(self) -> _rpc_type:
         match self._data_type:
-            case _ if _ is int:
+            case t if t is int:
                 return self._device._rpc_int(self.__name__, self._size_bytes, self._signed)
-            case _ if _ is float:
+            case t if t is float:
                 return self._device._rpc_float(self.__name__, self._size_bytes)
-            case _ if _ is str:
+            case t if t is str:
                 return self._device._rpc(self.__name__, b'').decode()
-            case _ if _ is bytes or _ is None:
+            case t if t is bytes or _ is None:
                 return self._device._rpc(self.__name__, b'')
             case other:
                 raise TypeError(f"Invalid RPC type {other}, RPC types must be {_rpc_type}")

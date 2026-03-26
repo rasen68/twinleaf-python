@@ -58,7 +58,8 @@ class Device(_twinleaf._Device):
             setattr(parent, attr_name, child)
             self._instantiate_rpcs_recursive(child, full_path)
 
-    def _samples_dict(self, n: int = 1, stream: str = "", columns: list[str] | None=None):
+    def _samples_dict(self, n: int = 1, stream: str = "", columns: list[str] | None=None) -> dict[int, dict[str, list[int | float]]]:
+        """ Parse underlying sample iterator into dict """
         if columns is None: columns = [] # Avoid mutable default
         samples = list(self._samples(n, stream=stream, columns=columns))
         # Bin into streams
@@ -73,7 +74,8 @@ class Device(_twinleaf._Device):
                 streams[stream_id][key].append(value)
         return streams
 
-    def _samples_list(self, n: int = 1, stream: str = "", columns: list[str] | None=None, time_column = True, title_row = True):
+    def _samples_list(self, n: int = 1, stream: str = "", columns: list[str] | None=None, time_column = True, title_row = True) -> list[list[str | int | float]]:
+        """ Parse underlying sample iterator into tabular array """
         if columns is None: columns = [] # Avoid mutable default
         streams = self._samples_dict(n, stream, columns)
         # Convert to list with rows of data. Not super happy about how inefficient this is. 
@@ -161,7 +163,7 @@ class _RpcNode:
                 # Check if it's an RPC that should be read
                 if isinstance(attr, _RpcBase):
                     if attr._data_type not in { None, bytes }:
-                        results[attr.__name__] = attr()
+                        results[attr.__name__] = attr._call()
 
                 # Recursively survey children (works for both Rpc and Survey)
                 results |= attr._survey()

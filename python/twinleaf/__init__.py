@@ -12,37 +12,25 @@ class Device(_Device):
             self._instantiate_samples(announce)
 
     def _rpc_int(self, name: str, size: int, signed: bool, value: int | None = None) -> int:
-        # print(name)
-        if signed:
-            match size:
-                case 1:
-                    fstr = '<b'
-                case 2:
-                    fstr = '<h'
-                case 4:
-                    fstr = '<i'
-        else:
-            match size:
-                case 1:
-                    fstr = '<B'
-                case 2:
-                    fstr = '<H'
-                case 4:
-                    fstr = '<I'
-        payload = b'' if value is None else _struct.pack(fstr, value)
-        rep = self._rpc(name, payload)
-
         import struct
+        match size, signed:
+            case 1, True: fstr = '<b'
+            case 2, True: fstr = '<h'
+            case 4, True: fstr = '<i'
+            case 1, False: fstr = '<B'
+            case 2, False: fstr = '<H'
+            case 4, False: fstr = '<I'
+        payload = b'' if value is None else struct.pack(fstr, value)
+        rep = self._rpc(name, payload)
         val = struct.unpack(fstr, rep)[0]
         del struct
         return val
 
     def _rpc_float(self, name: str, size: int, value: float | None = None) -> float:
-        fstr = '<f' if (size == 4) else '<d'
-        payload = b'' if value is None else _struct.pack(fstr, value)
-        rep = self._rpc(name, payload)
-
         import struct
+        fstr = '<f' if (size == 4) else '<d'
+        payload = b'' if value is None else struct.pack(fstr, value)
+        rep = self._rpc(name, payload)
         val = struct.unpack(fstr, rep)[0]
         del struct
         return val

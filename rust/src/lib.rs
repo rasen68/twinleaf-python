@@ -115,10 +115,10 @@ impl PyRpc {
 
     fn __repr__(&self) -> String {
         format!(
-            "Rpc(name='{}', type='{}', {})",
+            "_twinleaf._Rpc({} {}({}))",
+            self.inner.perm_str(),
             self.inner.full_name,
             self.inner.type_str(),
-            self.inner.perm_str()
         )
     }
 }
@@ -152,17 +152,13 @@ impl PyRegistry {
     }
 
     fn __repr__(&self) -> String {
-        let count = self.inner.search("").len();
-        if let Some(h) = self.inner.hash {
-            format!("Registry({} RPCs, hash=0x{:08x})", count, h)
-        } else {
-            format!("Registry({} RPCs)", count)
-        }
+        format!("_twinleaf._RpcRegistry({:?})", self.children_of(""))
     }
 }
 
 #[pyclass(name = "_Device", subclass)]
 struct PyDevice {
+    root: String,
     proxy: proxy::Interface,
     route: proto::DeviceRoute,
     rpc: device::RpcClient,
@@ -185,7 +181,17 @@ impl PyDevice {
         };
         let proxy = proxy::Interface::new(&root);
         let rpc = device::RpcClient::open(&proxy, route.clone()).unwrap();
-        Ok(PyDevice { proxy, route, rpc })
+        Ok(PyDevice { root, proxy, route, rpc })
+    }
+
+    #[getter]
+    fn _url(&self) -> String {
+        self.root.clone()
+    }
+
+    #[getter]
+    fn _route(&self) -> String {
+        format!("{}", self.route)
     }
 
     fn _rpc<'py>(&self, py: Python<'py>, name: &str, req: &[u8]) -> PyResult<Bound<'py, PyBytes>> {

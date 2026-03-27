@@ -12,6 +12,13 @@ class Device(_twinleaf._Device):
             self._instantiate_rpcs()
             self._instantiate_samples(announce)
 
+    def __repr__(self):
+        try:
+            dev_info = self._rpc('dev.serial', b'').decode()
+        except RuntimeError:
+            dev_info = ''
+        return f"{self.__module__}.{self.__class__.__name__}('{dev_info}', url='{self._url}', route='{self._route}'"
+
     def _rpc_int(self, name: str, size: int, signed: bool, value: int | None = None) -> int:
         """ Use struct to send int-typed RPCs """
         import struct
@@ -151,6 +158,9 @@ class _RpcNode:
     def __init__(self, name: str):
         self.__name__ = name
 
+    def __repr__(self):
+        return f"{self.__module__}.{self.__class__.__name__}('{self.__name__}')"
+
     def _survey(self) -> dict[str, _rpc_type]:
         """ Recursively collect all readable RPC values in this subtree """
         results = {}
@@ -217,6 +227,16 @@ class _Rpc(_RpcNode):
                 self._type = bytes
                 self._data_type = 0
 
+    def __repr__(self):
+        ret = super().__repr__().strip(')') + ", "
+        if hasattr(self, '_signed') and not self._signed:
+            ret += "u"
+        ret += self._type.__name__
+        if self._data_size: # is not 0 or None
+            ret += str(self._data_size*8)
+        ret += ')'
+        return ret
+
     def _call(self, arg: _rpc_type=None) -> _rpc_type:
         match self._type:
             case t if t is int:
@@ -254,6 +274,9 @@ class _SamplesBase:
         self.__name__ = name
         self._stream = stream
         self._columns = columns
+
+    def __repr__(self):
+        return f"{self.__module__}.{self.__class__.__name__}('{self.__name__}', stream='{self._stream}', columns={self._columns})"
 
 class _SamplesDict(_SamplesBase):
     """ Returns samples as dict keyed by stream_id """

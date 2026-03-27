@@ -193,8 +193,10 @@ class _Rpc(_RpcNode):
                 subclass = _RpcReadWrite
             case r if r.writable:
                 subclass = _RpcWriteOnly
+            case r if r.readable:
+                subclass = _RpcReadOnly
             case _:
-                subclass = _RpcReadOnly # read-only or action rpc
+                subclass = _RpcAction
         rpc = super().__new__(subclass)
         return rpc
 
@@ -265,6 +267,10 @@ class _RpcWriteOnly(_Rpc):
 class _RpcReadWrite(_Rpc):
     def __call__(self, arg=None):
         return self._call(arg)
+
+class _RpcAction(_Rpc):
+    def __call__(self) -> None:
+        return self._call()
 
 # Samples classes
 class _SamplesBase:

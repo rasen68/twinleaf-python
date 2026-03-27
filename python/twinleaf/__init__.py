@@ -81,7 +81,7 @@ class Device(_twinleaf._Device):
                 streams[stream_id][key].append(value)
         return streams
 
-    def _samples_list(self, n: int = 1, stream: str = "", columns: list[str] | None=None, time_column = True, title_row = True) -> list[list[str | int | float]]:
+    def _samples_list(self, n: int = 1, stream: str = "", columns: list[str] | None=None, time_column=True, title_row=True) -> list[list[str | int | float]]:
         """ Parse underlying sample iterator into tabular array """
         if columns is None: columns = [] # Avoid mutable default
         streams = self._samples_dict(n, stream, columns)
@@ -289,13 +289,13 @@ class _SamplesDict(_SamplesBase):
     def __init__(self, device: Device, name: str, stream: str="", columns: list[str] | None=None):
         super().__init__(device, name, stream, columns if columns is not None else [] )
 
-    def __call__(self, n: int=1, **kwargs):
-        return self._device._samples_dict(n, self._stream, self._columns, **kwargs)
+    def __call__(self, n: int=1, *, time_column=True, title_row=True):
+        return self._device._samples_dict(n, self._stream, self._columns, time_column=time_column, title_row=title_row)
 
 class _SamplesList(_SamplesBase):
     """ Returns samples as list for single stream """
     def __init__(self, device: Device, name: str, stream: str="", columns: list[str] | None=None):
         super().__init__(device, name, stream, columns if columns is not None else [] )
 
-    def __call__(self, n: int=1, **kwargs):
-        return self._device._samples_list(n, self._stream, self._columns, **kwargs)
+    def __call__(self, n: int=1, *, time_column=True, title_row=True):
+        return self._device._samples_list(n, self._stream, self._columns, time_column=time_column, title_row=title_row)

@@ -41,7 +41,7 @@ class Device(_twinleaf._Device):
     def _instantiate_rpcs(self):
         """ Set up Device.samples, then recursively instantiate RPCs """
         self._registry = self._rpc_registry()
-        self.settings = _RpcSurvey('settings', self)
+        self.settings = _RpcSurvey('settings')
         self._instantiate_rpcs_recursive(self.settings)
 
     def _instantiate_rpcs_recursive(self, parent, prefix=''):
@@ -54,7 +54,7 @@ class Device(_twinleaf._Device):
             if rpc is not None:
                 child = _Rpc(rpc, self)
             else:
-                child = _RpcSurvey(attr_name, self)
+                child = _RpcSurvey(attr_name)
             setattr(parent, attr_name, child)
             self._instantiate_rpcs_recursive(child, full_path)
 
@@ -148,12 +148,8 @@ class Device(_twinleaf._Device):
 type _rpc_type = int | float | str | bytes | None
 class _RpcNode:
     """ Base class for RPCs and surveys in the device tree """
-    def __init__(self, name, device: Device):
+    def __init__(self, name: str):
         self.__name__ = name
-        self._device = device
-
-    def __call__(self) -> dict[str, _rpc_type]:
-        return self._survey()
 
     def _survey(self) -> dict[str, _rpc_type]:
         """ Recursively collect all readable RPC values in this subtree """
@@ -161,20 +157,43 @@ class _RpcNode:
         for name, attr in self.__dict__.items():
             if isinstance(attr, _RpcNode):
                 # Check if it's an RPC that should be read
-                if isinstance(attr, _RpcBase):
-                    if attr._type not in { None, bytes }:
+                if isinstance(attr, _Rpc):
+                    if attr._readable and attr._type not in { None, bytes }:
                         results[attr.__name__] = attr._call()
 
                 # Recursively survey children (works for both Rpc and Survey)
                 results |= attr._survey()
         return results
 
-class _RpcBase(_RpcNode):
-    """ Internal base class for RPCs """
+class _RpcSurvey(_RpcNode):
+    """" Branch object that can collect all callable child RPC values """
+    def __init__(self, name: str):
+        super().__init__(name)
+
+    def __call__(self) -> dict[str, _rpc_type]:
+        return self._survey()
+
+class _Rpc(_RpcNode):
+    """ Base class for RPCs """
+    def __new__(cls, pyrpc: _twinleaf._Rpc, device: Device):
+        match pyrpc:
+            case r if r.type_str == '' and r.size_bytes != 0:
+                subclass = _RpcReadWrite # unknown/bytes rpc
+            case r if r.readable and r.writable:
+                subclass = _RpcReadWrite
+            case r if r.writable:
+                subclass = _RpcWriteOnly
+            case _:
+                subclass = _RpcReadOnly # read-only or action rpc
+        rpc = super().__new__(subclass)
+        return rpc
+
     def __init__(self, pyrpc: _twinleaf._Rpc, device: Device):
-        super().__init__(pyrpc.name, device)
+        super().__init__(pyrpc.name)
+        self._device = device
         self._data_size = pyrpc.size_bytes
-        self._writable   = pyrpc.writable
+        self._readable  = pyrpc.readable
+        self._writable  = pyrpc.writable
         self._type: type | None = None
         match pyrpc.type_str:
             case t if t.startswith('u'):
@@ -215,26 +234,17 @@ class _RpcBase(_RpcNode):
             case other:
                 raise TypeError(f"Invalid RPC type {other}, RPC types must be {_rpc_type}")
 
-def _Rpc(pyrpc: _twinleaf._Rpc, device: Device) -> _RpcNode:
-    """ Factory function that creates an RPC with appropriate __call__ signature """
-    base_rpc = _RpcBase(pyrpc, device)
-    if base_rpc._writable and base_rpc._type is not None:
-        def __call__(self, arg=None):
-            return self._call(arg)
-        __call__.__annotations__ |= { 'arg': base_rpc._type | None }
-        __call__.__annotations__ |= { 'return': base_rpc._type }
-    else:
-        def __call__(self) -> _rpc_type:
-            return self._call()
-        __call__.__annotations__ |= { 'return': base_rpc._type }
+class _RpcReadOnly(_Rpc):
+    def __call__(self):
+        return self._call()
 
-    cls = type('Rpc', (_RpcBase,), {'__call__': __call__})
-    return cls(pyrpc, device)
+class _RpcWriteOnly(_Rpc):
+    def __call__(self, arg):
+        return self._call(arg)
 
-def _RpcSurvey(name: str, device: Device) -> _RpcNode:
-    """ Factory function that creates an RPC survey """
-    cls = type('Survey', (_RpcNode,), {})
-    return cls(name, device)
+class _RpcReadWrite(_Rpc):
+    def __call__(self, arg=None):
+        return self._call(arg)
 
 # Samples classes
 class _SamplesBase:
